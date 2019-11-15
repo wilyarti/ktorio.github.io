@@ -72,6 +72,47 @@ suspend fun parallelRequests() = coroutineScope<Unit> {
 }
 ```
 
+To create a parallel list of jobs with error handling use the supervisorScope (this allow individual jobs to fail). The following code will run all of the jobs simultaneously and return when they are all completed.
+```kotlin
+suspend fun parallelRequests(requests: List<String>) = supervisorScope<Unit> {
+    // Create our HTTP client
+    val client = HttpClient(Apache) {
+        install(JsonFeature) {
+            serializer = GsonSerializer {
+                // .GsonBuilder
+                serializeNulls()
+                disableHtmlEscaping()
+            }
+        }
+    }
+    // Create a list of our jobs
+    val jobs = mutableListOf<Deferred<Boolean>>()
+    for (req in requests) {
+        // Launch job asynchronosly 
+        val job = async() {
+            val results = client.get<ChannelSummary> {
+                url(req)
+                contentType(ContentType.Application.Json)
+            }
+            // Use data in another function
+            insertChannel(results.channel)
+        }
+        // Add job to job list.
+        jobs.add(job)
+    }
+    // Now collect all our jobs. Deal with errors.
+    for (job in jobs) {
+        try {
+            job.await()
+        } catch (e: Throwable) {
+            println(e)
+        }
+    }
+    // Close HTTP client.
+    client.close()
+}
+```
+
 ## Examples
 {: #examples }
 
